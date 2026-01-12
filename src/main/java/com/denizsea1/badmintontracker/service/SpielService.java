@@ -17,8 +17,15 @@ import java.util.NoSuchElementException;
  *
  * - Start eines neuen Spiels mit zwei Teams
  * - Vergabe von Punkten (inkl. Aufschlag- und Positionslogik)
+ * - Undo/Korrektur von Punkten (vereinfachte Variante)
+ * - Spielabbruch ("Abbrecher verliert")
  * - Erkennen von Satzende und Matchende (Best-of-Three)
- * - Pausenempfehlung bei >=11 Punkten
+ * - Pausenempfehlung bei >= 11 Punkten
+ *
+ * Zusätzlich:
+ * - Spieler haben ein Flag inAktivemSpiel.
+ *   → Beim Start eines Spiels wird geprüft, ob alle Spieler frei sind.
+ *   → Beim Matchende oder Abbruch werden alle Beteiligten wieder freigegeben.
  *
  * Controller sprechen nur diesen Service an – die fachliche Logik liegt hier.
  */
@@ -44,6 +51,15 @@ public class SpielService {
     /**
      * Startet ein neues Spiel mit zwei bestehenden Teams.
      *
+     * Prüft zusätzlich:
+     * - Keiner der Spieler in Team A / B ist aktuell in einem laufenden Spiel
+     *   (spieler.isInAktivemSpiel() == false).
+     *   → sonst IllegalStateException.
+     *
+     * Setzt beim Start:
+     * - spiel.status = LAUFEND
+     * - alle beteiligten Spieler.inAktivemSpiel = true
+     *
      * @param teamAId           ID von Team A
      * @param teamBId           ID von Team B
      * @param aufschlagTeamIstA true, falls Team A den ersten Aufschlag hat
@@ -64,10 +80,13 @@ public class SpielService {
         Team teamB = teamRepository.findById(teamBId)
                 .orElseThrow(() -> new NoSuchElementException("Team B nicht gefunden: " + teamBId));
 
+        // Prüfen, ob alle Spieler frei sind (nicht in anderem laufenden Spiel)
+        pruefeSpielerVerfuegbar(teamA, teamB);
+
         // Neues Spiel mit aktuellem Datum
         Spiel spiel = new Spiel(LocalDate.now());
-        spiel.addTeam(teamA);
-        spiel.addTeam(teamB);
+        spiel.addTeam(teamA);   // Index 0 = Team A
+        spiel.addTeam(teamB);   // Index 1 = Team B
 
         // Aufschlagteam und Startseite setzen
         spiel.setAufschlagTeam(aufschlagTeamIstA ? teamA : teamB);
@@ -78,6 +97,9 @@ public class SpielService {
         ersterSatz.setPunkteTeamA(0);
         ersterSatz.setPunkteTeamB(0);
         spiel.addSatz(ersterSatz);
+
+        // Alle beteiligten Spieler als "aktiv" markieren
+        markiereSpielerAktiv(true, teamA, teamB);
 
         return spielRepository.save(spiel);
     }
@@ -114,10 +136,14 @@ public class SpielService {
 
         // Nur laufende Spiele dürfen Punkte bekommen
         if (spiel.getStatus() != SpielStatus.LAUFEND) {
-            throw new IllegalStateException("Spiel ist nicht mehr LAUFEND (Status: " + spiel.getStatus() + ")");
+            throw new IllegalStateException(
+                    "Spiel ist nicht mehr LAUFEND (Status: " + spiel.getStatus() + ")");
         }
 
         // Wir gehen davon aus: Teams[0] = A, Teams[1] = B
+        if (spiel.getTeams().size() < 2) {
+            throw new IllegalStateException("Spiel hat nicht genau zwei Teams.");
+        }
         Team teamA = spiel.getTeams().get(0);
         Team teamB = spiel.getTeams().get(1);
 
@@ -141,7 +167,136 @@ public class SpielService {
     }
 
     // -------------------------------------------------------------------------
-    // 3) Hilfsmethoden zum Laden / aktuellen Satz finden
+    // 2b) Undo für Punkte (vereinfachte Variante)
+    // -------------------------------------------------------------------------
+
+    @Transactional
+    public Spiel undoPunktFuerTeamA(Long spielId) {
+        return undoPunkt(spielId, true);
+    }
+
+    @Transactional
+    public Spiel undoPunktFuerTeamB(Long spielId) {
+        return undoPunkt(spielId, false);
+    }
+
+    /**
+     * Macht den letzten Punkt für Team A oder B wieder rückgängig.
+     *
+     * Einfache Variante:
+     * - Wir gehen davon aus, dass dieser Undo sich auf den letzten vergebenen Punkt bezieht
+     *   und dass dieser Punkt vom angegebenen Team stammt.
+     * - Wenn das Punkt-Team aktuell auch das Aufschlagteam ist, drehen wir
+     *   Positionswechsel + Aufschlagseite wieder zurück.
+     *
+     * Für das Praktikum reicht diese "1-Schritt-Rückgängig"-Logik aus.
+     */
+    private Spiel undoPunkt(Long spielId, boolean undoFuerTeamA) {
+        Spiel spiel = ladeSpiel(spielId);
+
+        if (spiel.getStatus() != SpielStatus.LAUFEND) {
+            throw new IllegalStateException("Punkte können nur in laufenden Spielen zurückgenommen werden.");
+        }
+
+        if (spiel.getTeams().size() < 2) {
+            throw new IllegalStateException("Spiel hat nicht genau zwei Teams.");
+        }
+
+        Team teamA = spiel.getTeams().get(0);
+        Team teamB = spiel.getTeams().get(1);
+        Team punktTeam = undoFuerTeamA ? teamA : teamB;
+
+        Satz aktuellerSatz = ermittleAktuellenSatz(spiel);
+
+        // 1) Punktestand zurückdrehen
+        if (undoFuerTeamA) {
+            if (aktuellerSatz.getPunkteTeamA() <= 0) {
+                throw new IllegalStateException("Team A hat keinen Punkt, der rückgängig gemacht werden kann.");
+            }
+            aktuellerSatz.setPunkteTeamA(aktuellerSatz.getPunkteTeamA() - 1);
+        } else {
+            if (aktuellerSatz.getPunkteTeamB() <= 0) {
+                throw new IllegalStateException("Team B hat keinen Punkt, der rückgängig gemacht werden kann.");
+            }
+            aktuellerSatz.setPunkteTeamB(aktuellerSatz.getPunkteTeamB() - 1);
+        }
+
+        // 2) Aufschlag-/Positionslogik rückgängig machen
+        //
+        // Bei der Punktevergabe gilt:
+        //  - Der Punkt wird immer vom aktuellen Aufschlagteam aus bewertet.
+        //  - Wenn das Aufschlagteam den Punkt macht:
+        //      -> Positionen dieses Teams werden getauscht
+        //      -> Aufschlagseite wird invertiert
+        //
+        // Undo: genau das wieder zurückdrehen.
+        if (spiel.getAufschlagTeam() != null && spiel.getAufschlagTeam().equals(punktTeam)) {
+            // Spielerpositionen wieder zurücktauschen
+            wechslePositionenImTeam(punktTeam);
+
+            // Aufschlagseite wieder invertieren -> zurück auf ursprüngliche Seite
+            Seite aktuelleSeite = spiel.getAufschlagSeite();
+            if (aktuelleSeite != null) {
+                spiel.setAufschlagSeite(aktuelleSeite.invert());
+            }
+        }
+
+        // Satz-/Matchende behandeln wir in dieser einfachen Variante nicht rückwärts,
+        // d.h. Undo ist vor allem für Korrekturen mitten im Satz gedacht.
+
+        return spielRepository.save(spiel);
+    }
+
+
+    // -------------------------------------------------------------------------
+    // 3) Spielabbruch ("Abbrecher verliert")
+    // -------------------------------------------------------------------------
+
+    /**
+     * Bricht ein laufendes Spiel ab.
+     *
+     * @param spielId        ID des Spiels
+     * @param teamAGibtAuf   true  -> Team A (Teams[0]) gibt auf,
+     *                       false -> Team B (Teams[1]) gibt auf
+     *
+     * Verhalten:
+     * - Spiel muss LAUFEND sein, sonst IllegalStateException.
+     * - Gewinnerteam wird auf das jeweils andere Team gesetzt.
+     * - Status wird auf ABGEBROCHEN gesetzt.
+     * - Alle beteiligten Spieler werden wieder als "frei" markiert
+     *   (inAktivemSpiel = false).
+     */
+    @Transactional
+    public Spiel brecheSpielAb(Long spielId, boolean teamAGibtAuf) {
+        Spiel spiel = ladeSpiel(spielId);
+
+        if (spiel.getStatus() != SpielStatus.LAUFEND) {
+            throw new IllegalStateException(
+                    "Nur laufende Spiele können abgebrochen werden (Status: " + spiel.getStatus() + ")");
+        }
+
+        if (spiel.getTeams().size() < 2) {
+            throw new IllegalStateException("Spiel hat nicht genau zwei Teams.");
+        }
+
+        Team teamA = spiel.getTeams().get(0);
+        Team teamB = spiel.getTeams().get(1);
+
+        Team gewinner = teamAGibtAuf ? teamB : teamA;
+
+        // Gewinner setzen (setzt intern Status = BEENDET)
+        spiel.setGewinnerTeam(gewinner);
+        // Status explizit auf ABGEBROCHEN setzen
+        spiel.setStatus(SpielStatus.ABGEBROCHEN);
+
+        // Alle Spieler wieder freigeben
+        markiereSpielerAlsFrei(spiel);
+
+        return spielRepository.save(spiel);
+    }
+
+    // -------------------------------------------------------------------------
+    // 4) Hilfsmethoden zum Laden / aktuellen Satz finden
     // -------------------------------------------------------------------------
 
     /**
@@ -163,7 +318,7 @@ public class SpielService {
     }
 
     // -------------------------------------------------------------------------
-    // 4) Aufschlag- und Positionslogik
+    // 5) Aufschlag- und Positionslogik
     // -------------------------------------------------------------------------
 
     /**
@@ -247,7 +402,7 @@ public class SpielService {
     }
 
     // -------------------------------------------------------------------------
-    // 5) Satzende & Spielende (Best-of-Three)
+    // 6) Satzende & Spielende (Best-of-Three)
     // -------------------------------------------------------------------------
 
     /**
@@ -261,6 +416,8 @@ public class SpielService {
      * - Matchende:
      *   Ein Team hat 2 Sätze gewonnen (Best-of-Three).
      *   In diesem Fall wird gewinnerTeam gesetzt und status = BEENDET.
+     *   Zusätzlich werden alle beteiligten Spieler als "frei" markiert
+     *   (inAktivemSpiel = false).
      *
      * - Wenn noch kein Matchgewinner feststeht:
      *   und weniger als 3 Sätze existieren, wird ein neuer Satz angelegt.
@@ -273,6 +430,9 @@ public class SpielService {
         }
 
         // Zähle gewonnene Sätze pro Team
+        if (spiel.getTeams().size() < 2) {
+            throw new IllegalStateException("Spiel hat nicht genau zwei Teams.");
+        }
         Team teamA = spiel.getTeams().get(0);
         Team teamB = spiel.getTeams().get(1);
 
@@ -293,11 +453,14 @@ public class SpielService {
         // Matchende prüfen (Best-of-Three: 2 Gewinnsätze)
         if (gewonneneSaetzeA >= 2) {
             spiel.setGewinnerTeam(teamA); // setzt intern auch status = BEENDET
+            // Spieler wieder freigeben
+            markiereSpielerAlsFrei(spiel);
             return;
         }
 
         if (gewonneneSaetzeB >= 2) {
             spiel.setGewinnerTeam(teamB);
+            markiereSpielerAlsFrei(spiel);
             return;
         }
 
@@ -339,7 +502,7 @@ public class SpielService {
     }
 
     // -------------------------------------------------------------------------
-    // 6) Pausenempfehlung
+    // 7) Pausenempfehlung
     // -------------------------------------------------------------------------
 
     /**
@@ -354,5 +517,56 @@ public class SpielService {
         Satz aktuellerSatz = ermittleAktuellenSatz(spiel);
         int maxPunkte = Math.max(aktuellerSatz.getPunkteTeamA(), aktuellerSatz.getPunkteTeamB());
         return maxPunkte >= 11;
+    }
+
+    // -------------------------------------------------------------------------
+    // 8) Spieler-Verfügbarkeit (inAktivemSpiel)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Prüft, ob alle Spieler in den übergebenen Teams aktuell "frei" sind
+     * (inAktivemSpiel == false).
+     *
+     * Falls irgendein Spieler bereits in einem laufenden Spiel steckt,
+     * wird eine IllegalStateException geworfen.
+     */
+    private void pruefeSpielerVerfuegbar(Team... teams) {
+        for (Team team : teams) {
+            for (Spieler s : team.getSpieler()) {
+                if (s.isInAktivemSpiel()) {
+                    String name = (s.getVorname() != null ? s.getVorname() : "")
+                            + " "
+                            + (s.getNachname() != null ? s.getNachname() : "");
+                    throw new IllegalStateException(
+                            "Spieler " + name.trim() + " ist bereits in einem laufenden Spiel.");
+                }
+            }
+        }
+    }
+
+    /**
+     * Setzt für alle Spieler in den übergebenen Teams das Flag inAktivemSpiel.
+     *
+     * @param aktiv true  -> Spieler wird als "in aktivem Spiel" markiert
+     *              false -> Spieler wird als "frei" markiert
+     */
+    private void markiereSpielerAktiv(boolean aktiv, Team... teams) {
+        for (Team team : teams) {
+            for (Spieler s : team.getSpieler()) {
+                s.setInAktivemSpiel(aktiv);
+            }
+        }
+    }
+
+    /**
+     * Markiert alle Spieler eines Spiels als "frei" (inAktivemSpiel = false).
+     * Wird bei Matchende oder Spielabbruch aufgerufen.
+     */
+    private void markiereSpielerAlsFrei(Spiel spiel) {
+        for (Team team : spiel.getTeams()) {
+            for (Spieler s : team.getSpieler()) {
+                s.setInAktivemSpiel(false);
+            }
+        }
     }
 }

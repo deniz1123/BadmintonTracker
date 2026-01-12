@@ -1,6 +1,7 @@
 package com.denizsea1.badmintontracker.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,14 +16,39 @@ public class Spiel {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Datum, an dem das Spiel stattfindet.
+     */
     private LocalDate datum;
 
-    @OneToMany(mappedBy = "spiel", cascade = CascadeType.ALL, orphanRemoval = true)
+    /**
+     * Die Teams dieses Spiels (Team A und Team B).
+     *
+     * Many-to-Many:
+     * - Ein Spiel hat typischerweise 2 Teams.
+     * - Ein Team kann in mehreren Spielen vorkommen.
+     *
+     * Wir nutzen die Reihenfolge:
+     *   teams.get(0) = Team A
+     *   teams.get(1) = Team B
+     */
+    @ManyToMany
+    @JoinTable(
+            name = "spiel_team",
+            joinColumns = @JoinColumn(name = "spiel_id"),
+            inverseJoinColumns = @JoinColumn(name = "team_id")
+    )
     private List<Team> teams = new ArrayList<>();
 
+    /**
+     * Die Sätze (max. 3) dieses Spiels.
+     */
     @OneToMany(mappedBy = "spiel", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Satz> saetze = new ArrayList<>();
 
+    /**
+     * Gewinnerteam dieses Spiels (falls vorhanden).
+     */
     @ManyToOne
     private Team gewinnerTeam;
 
@@ -44,18 +70,24 @@ public class Spiel {
     @Enumerated(EnumType.STRING)
     private SpielStatus status;
 
-    public Spiel() {}
+    public Spiel() {
+    }
 
     public Spiel(LocalDate datum) {
         this.datum = datum;
         this.status = SpielStatus.LAUFEND;
     }
 
+    // -------------------------------------------------------------------------
     // Hilfsmethoden, um Teams/Sätze sauber zu verknüpfen
+    // -------------------------------------------------------------------------
 
+    /**
+     * Fügt dem Spiel ein Team hinzu.
+     * Reihenfolge der Aufrufe bestimmt, welches Team "A" bzw. "B" ist.
+     */
     public void addTeam(Team team) {
         teams.add(team);
-        team.setSpiel(this);
     }
 
     public void addSatz(Satz satz) {
@@ -63,8 +95,9 @@ public class Spiel {
         satz.setSpiel(this);
     }
 
-    // ---- Getter/Setter ----
-
+    // -------------------------------------------------------------------------
+    // Getter/Setter
+    // -------------------------------------------------------------------------
 
     public Long getId() {
         return id;
@@ -99,7 +132,7 @@ public class Spiel {
     }
 
     /**
-     * Setzt das Gewinnerteam und markiert das Spiel als BEENDT.
+     * Setzt das Gewinnerteam und markiert das Spiel als BEENDET.
      */
     public void setGewinnerTeam(Team gewinnerTeam) {
         this.gewinnerTeam = gewinnerTeam;

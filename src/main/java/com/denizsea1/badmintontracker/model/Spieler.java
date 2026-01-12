@@ -18,8 +18,6 @@ public class Spieler {
 
     /**
      * Position dieses Spielers innerhalb seines Teams (LINKS/RECHTS).
-     * Wird von der Spiellogik verwendet, um bei einem Punkt des
-     * Aufschlagteams die Seiten wechseln zu können.
      */
     @Enumerated(EnumType.STRING)
     private Seite positionImTeam;
@@ -27,6 +25,11 @@ public class Spieler {
     @ManyToOne
     @JsonIgnore
     private Team team;
+
+    /**
+     * Flag: ist der Spieler aktuell in einem laufenden Spiel beteiligt?
+     */
+    private boolean inAktivemSpiel = false;
 
     public Spieler() {
     }
@@ -73,5 +76,13 @@ public class Spieler {
 
     public void setTeam(Team team) {
         this.team = team;
+    }
+
+    public boolean isInAktivemSpiel() {
+        return inAktivemSpiel;
+    }
+
+    public void setInAktivemSpiel(boolean inAktivemSpiel) {
+        this.inAktivemSpiel = inAktivemSpiel;
     }
 }

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8"/>
+    <title>BadmintonTracker – Start</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #f5f5f5;
+        }
+
+        h1, h2 {
+            margin-top: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        label {
+            display: block;
+            margin-top: 8px;
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 6px 8px;
+            margin-top: 4px;
+            box-sizing: border-box;
+        }
+
+        .row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .row > div {
+            flex: 1;
+            min-width: 220px;
+        }
+
+        button {
+            margin-top: 12px;
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        button.primary {
+            background-color: #1976d2;
+            color: white;
+        }
+
+        button.primary:hover {
+            background-color: #145ba5;
+        }
+
+        .teams-list {
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+
+        .teams-list span {
+            display: inline-block;
+            margin-right: 12px;
+            margin-top: 4px;
+            padding: 4px 8px;
+            background: #eeeeee;
+            border-radius: 4px;
+        }
+
+        .info {
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        .error {
+            color: #b00020;
+            margin-top: 8px;
+        }
+
+        .success {
+            color: #2e7d32;
+            margin-top: 8px;
+        }
+
+        .header-links a {
+            margin-right: 12px;
+        }
+
+        .inline-options label {
+            display: inline-block;
+            margin-right: 16px;
+            margin-top: 4px;
+        }
+
+        .section-title {
+            margin-bottom: 4px;
+        }
+
+        .section-subtitle {
+            margin-top: 0;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>BadmintonTracker – Start</h1>
+        <div class="header-links">
+            <a href="/history">📊 Historie anzeigen</a>
+        </div>
+        <p class="info">
+            Hier kannst du Teams anlegen (mit neuen oder bestehenden Spielern), ein Spiel starten
+            und in der <a href="/history">Historie</a> gespeicherte Partien ansehen.
+        </p>
+    </div>
+
+    <!-- Team anlegen mit NEUEN Spielern -->
+    <div class="card">
+        <h2 class="section-title">Neues Team anlegen (mit neuen Spielern)</h2>
+        <p class="section-subtitle">
+            Ein Team besteht aus genau zwei Spielern. Die Positionen (links/rechts)
+            werden automatisch vom System vergeben.
+        </p>
+
+        <div class="row">
+            <div>
+                <h3>Spieler 1 (neu)</h3>
+                <label>Vorname
+                    <input type="text" id="s1Vorname" placeholder="Max">
+                </label>
+                <label>Nachname
+                    <input type="text" id="s1Nachname" placeholder="Mueller">
+                </label>
+            </div>
+            <div>
+                <h3>Spieler 2 (neu)</h3>
+                <label>Vorname
+                    <input type="text" id="s2Vorname" placeholder="Lara">
+                </label>
+                <label>Nachname
+                    <input type="text" id="s2Nachname" placeholder="Schulz">
+                </label>
+            </div>
+        </div>
+
+        <button class="primary" id="btnCreateTeamNew">Team mit neuen Spielern anlegen</button>
+        <div id="createTeamNewMessage"></div>
+    </div>
+
+    <!-- Team anlegen mit BESTEHENDEN Spielern (Namen werden geklont) -->
+    <div class="card">
+        <h2 class="section-title">Neues Team aus bestehenden Spielern anlegen</h2>
+        <p class="section-subtitle">
+            Wähle zwei bereits angelegte Spieler aus, um ein neues Team zu bilden.
+            Es werden neue Spieler mit denselben Namen angelegt, damit jedes Team
+            seine eigenen Spieler-Instanzen hat.
+        </p>
+
+        <div class="row">
+            <div>
+                <h3>Spieler 1 (bestehend)</h3>
+                <label>Spieler auswählen
+                    <select id="existingSpieler1Select">
+                        <option value="">-- Spieler auswählen --</option>
+                    </select>
+                </label>
+            </div>
+            <div>
+                <h3>Spieler 2 (bestehend)</h3>
+                <label>Spieler auswählen
+                    <select id="existingSpieler2Select">
+                        <option value="">-- Spieler auswählen --</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <button class="primary" id="btnCreateTeamExisting">Team aus bestehenden Spielern anlegen</button>
+        <div id="createTeamExistingMessage"></div>
+    </div>
+
+    <!-- Anzeige bekannter Teams -->
+    <div class="card">
+        <h2 class="section-title">Bekannte Teams</h2>
+        <p class="section-subtitle">
+            Diese Teams stehen dir zum Start neuer Spiele zur Verfügung.
+        </p>
+        <div class="teams-list">
+            <div id="teamsDisplay"></div>
+        </div>
+    </div>
+
+    <!-- Spiel starten -->
+    <div class="card">
+        <h2 class="section-title">Neues Spiel starten</h2>
+        <p class="section-subtitle">
+            Wähle zwei Teams, den ersten Aufschläger und die Startseite. Danach gelangst du
+            in die Detailansicht des Spiels.
+        </p>
+
+        <div class="row">
+            <div>
+                <label>Team A
+                    <select id="teamASelect">
+                        <option value="">-- Team A auswählen --</option>
+                    </select>
+                </label>
+            </div>
+            <div>
+                <label>Team B
+                    <select id="teamBSelect">
+                        <option value="">-- Team B auswählen --</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <p>Wer schlägt zuerst auf?</p>
+        <div class="inline-options">
+            <label>
+                <input type="radio" name="aufschlagTeam" value="A" checked>
+                Team A
+            </label>
+            <label>
+                <input type="radio" name="aufschlagTeam" value="B">
+                Team B
+            </label>
+        </div>
+
+        <label>Startseite (Aufschlag-Seite des aufschlagenden Teams)
+            <select id="startSeiteSelect">
+                <option value="RECHTS">RECHTS</option>
+                <option value="LINKS">LINKS</option>
+            </select>
+        </label>
+
+        <button class="primary" id="btnStartMatch">Spiel starten</button>
+        <div id="startMatchMessage"></div>
+    </div>
+
+</div>
+
+<script>
+    const API_BASE = "";
+
+    const teamASelect = document.getElementById("teamASelect");
+    const teamBSelect = document.getElementById("teamBSelect");
+    const teamsDisplay = document.getElementById("teamsDisplay");
+
+    const createTeamNewMessage = document.getElementById("createTeamNewMessage");
+    const createTeamExistingMessage = document.getElementById("createTeamExistingMessage");
+    const startMatchMessage = document.getElementById("startMatchMessage");
+
+    const existingSpieler1Select = document.getElementById("existingSpieler1Select");
+    const existingSpieler2Select = document.getElementById("existingSpieler2Select");
+
+    // Cache für Spieler aus /spieler
+    let cachedSpielerListe = [];
+
+    // ---------------- Hilfsfunktionen UI ----------------
+
+    function addTeamToSelects(team) {
+        const optionA = document.createElement("option");
+        optionA.value = team.id;
+        optionA.textContent = "Team " + team.id;
+        teamASelect.appendChild(optionA);
+
+        const optionB = document.createElement("option");
+        optionB.value = team.id;
+        optionB.textContent = "Team " + team.id;
+        teamBSelect.appendChild(optionB);
+    }
+
+    function addTeamToDisplay(team) {
+        const span = document.createElement("span");
+        span.textContent = "Team " + team.id + " (" +
+            team.spieler.map(s => s.vorname + " " + s.nachname).join(", ") + ")";
+        teamsDisplay.appendChild(span);
+    }
+
+    function addSpielerToExistingSelects(spieler) {
+        const text = "Spieler " + spieler.id + ": " + spieler.vorname + " " + spieler.nachname;
+
+        const opt1 = document.createElement("option");
+        opt1.value = spieler.id;
+        opt1.textContent = text;
+        existingSpieler1Select.appendChild(opt1);
+
+        const opt2 = document.createElement("option");
+        opt2.value = spieler.id;
+        opt2.textContent = text;
+        existingSpieler2Select.appendChild(opt2);
+    }
+
+    // ---------------- Load-Funktionen ----------------
+
+    async function loadTeams() {
+        teamsDisplay.innerHTML = "";
+        teamASelect.innerHTML = '<option value="">-- Team A auswählen --</option>';
+        teamBSelect.innerHTML = '<option value="">-- Team B auswählen --</option>';
+
+        try {
+            const response = await fetch(API_BASE + "/teams");
+            if (!response.ok) {
+                console.warn("GET /teams nicht erfolgreich:", response.status);
+                return;
+            }
+            const teams = await response.json();
+            teams.forEach(team => {
+                addTeamToSelects(team);
+                addTeamToDisplay(team);
+            });
+        } catch (e) {
+            console.error("Fehler beim Laden der Teams:", e);
+        }
+    }
+
+    async function loadSpieler() {
+        existingSpieler1Select.innerHTML = '<option value="">-- Spieler auswählen --</option>';
+        existingSpieler2Select.innerHTML = '<option value="">-- Spieler auswählen --</option>';
+
+        try {
+            const response = await fetch(API_BASE + "/spieler");
+            if (!response.ok) {
+                console.warn("GET /spieler nicht erfolgreich:", response.status);
+                return;
+            }
+            const spielerListe = await response.json();
+
+            // Cache aktualisieren
+            cachedSpielerListe = spielerListe;
+
+            spielerListe.forEach(s => addSpielerToExistingSelects(s));
+        } catch (e) {
+            console.error("Fehler beim Laden der Spieler:", e);
+        }
+    }
+
+    // ---------------- Team anlegen: NEUE Spieler ----------------
+
+    async function createTeamWithNewPlayers() {
+        createTeamNewMessage.textContent = "";
+        createTeamNewMessage.className = "";
+
+        const v1 = document.getElementById("s1Vorname").value.trim();
+        const n1 = document.getElementById("s1Nachname").value.trim();
+        const v2 = document.getElementById("s2Vorname").value.trim();
+        const n2 = document.getElementById("s2Nachname").value.trim();
+
+        if (!v1 || !n1 || !v2 || !n2) {
+            createTeamNewMessage.textContent = "Bitte alle Namen eingeben.";
+            createTeamNewMessage.className = "error";
+            return;
+        }
+
+        const body = {
+            spieler: [
+                { vorname: v1, nachname: n1 },
+                { vorname: v2, nachname: n2 }
+            ]
+        };
+
+        try {
+            const response = await fetch(API_BASE + "/teams", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                createTeamNewMessage.textContent =
+                    "Fehler beim Anlegen des Teams (Status " + response.status + ").";
+                createTeamNewMessage.className = "error";
+                return;
+            }
+
+            const team = await response.json();
+            createTeamNewMessage.textContent =
+                "Team " + team.id + " wurde mit neuen Spielern angelegt.";
+            createTeamNewMessage.className = "success";
+
+            addTeamToSelects(team);
+            addTeamToDisplay(team);
+
+            // Eingaben leeren
+            document.getElementById("s1Vorname").value = "";
+            document.getElementById("s1Nachname").value = "";
+            document.getElementById("s2Vorname").value = "";
+            document.getElementById("s2Nachname").value = "";
+
+            // Spieler-Liste neu laden (die neuen Spieler tauchen jetzt in /spieler auf)
+            loadSpieler();
+
+        } catch (e) {
+            console.error("Fehler beim Anlegen des Teams:", e);
+            createTeamNewMessage.textContent = "Unerwarteter Fehler beim Anlegen des Teams.";
+            createTeamNewMessage.className = "error";
+        }
+    }
+
+    // ---------------- Team anlegen: BESTEHENDE Spieler (Namen klonen) ----------------
+
+    async function createTeamWithExistingPlayers() {
+        createTeamExistingMessage.textContent = "";
+        createTeamExistingMessage.className = "";
+
+        const id1 = existingSpieler1Select.value;
+        const id2 = existingSpieler2Select.value;
+
+        if (!id1 || !id2) {
+            createTeamExistingMessage.textContent = "Bitte beide Spieler auswählen.";
+            createTeamExistingMessage.className = "error";
+            return;
+        }
+
+        if (id1 === id2) {
+            createTeamExistingMessage.textContent = "Spieler 1 und Spieler 2 müssen unterschiedlich sein.";
+            createTeamExistingMessage.className = "error";
+            return;
+        }
+
+        // Aus dem Cache die zwei Spieler-Objekte holen
+        const s1 = cachedSpielerListe.find(s => s.id === Number(id1));
+        const s2 = cachedSpielerListe.find(s => s.id === Number(id2));
+
+        if (!s1 || !s2) {
+            createTeamExistingMessage.textContent =
+                "Ausgewählte Spieler konnten nicht gefunden werden.";
+            createTeamExistingMessage.className = "error";
+            return;
+        }
+
+        // Body für POST /teams: neue Spieler-Entities mit gleichen Namen
+        const body = {
+            spieler: [
+                { vorname: s1.vorname, nachname: s1.nachname },
+                { vorname: s2.vorname, nachname: s2.nachname }
+            ]
+        };
+
+        try {
+            const response = await fetch(API_BASE + "/teams", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                createTeamExistingMessage.textContent =
+                    "Fehler beim Anlegen des Teams (Status " + response.status + ").";
+                createTeamExistingMessage.className = "error";
+                return;
+            }
+
+            const team = await response.json();
+            createTeamExistingMessage.textContent =
+                "Team " + team.id + " wurde aus bestehenden Spielern (kopierten Namen) angelegt.";
+            createTeamExistingMessage.className = "success";
+
+            addTeamToSelects(team);
+            addTeamToDisplay(team);
+
+        } catch (e) {
+            console.error("Fehler beim Anlegen des Teams aus bestehenden Spielern:", e);
+            createTeamExistingMessage.textContent = "Unerwarteter Fehler beim Anlegen des Teams.";
+            createTeamExistingMessage.className = "error";
+        }
+    }
+
+    // ---------------- Spiel starten ----------------
+
+    async function startMatch() {
+        startMatchMessage.textContent = "";
+        startMatchMessage.className = "";
+
+        const teamAId = teamASelect.value;
+        const teamBId = teamBSelect.value;
+
+        const aufschlagTeamValue =
+            document.querySelector('input[name="aufschlagTeam"]:checked').value;
+        const aufschlagTeamIstA = (aufschlagTeamValue === "A");
+
+        const startSeite = document.getElementById("startSeiteSelect").value;
+
+        if (!teamAId || !teamBId) {
+            startMatchMessage.textContent = "Bitte Team A und Team B auswählen.";
+            startMatchMessage.className = "error";
+            return;
+        }
+
+        if (teamAId === teamBId) {
+            startMatchMessage.textContent = "Team A und Team B müssen unterschiedlich sein.";
+            startMatchMessage.className = "error";
+            return;
+        }
+
+        const url = API_BASE + "/spiele/start"
+            + "?teamAId=" + encodeURIComponent(teamAId)
+            + "&teamBId=" + encodeURIComponent(teamBId)
+            + "&aufschlagTeamIstA=" + encodeURIComponent(aufschlagTeamIstA)
+            + "&startSeite=" + encodeURIComponent(startSeite);
+
+        try {
+            const response = await fetch(url, { method: "POST" });
+
+            if (!response.ok) {
+                startMatchMessage.textContent =
+                    "Fehler beim Starten des Spiels (Status " + response.status + ").";
+                startMatchMessage.className = "error";
+                return;
+            }
+
+            const spiel = await response.json();
+            startMatchMessage.textContent =
+                "Spiel " + spiel.id + " wurde gestartet. Wechsel zur Matchansicht...";
+            startMatchMessage.className = "success";
+
+            window.location.href = "/match/" + spiel.id;
+
+        } catch (e) {
+            console.error("Fehler beim Starten des Spiels:", e);
+            startMatchMessage.textContent = "Unerwarteter Fehler beim Starten des Spiels.";
+            startMatchMessage.className = "error";
+        }
+    }
+
+    // ---------------- Event-Handler & Initialisierung ----------------
+
+    document.getElementById("btnCreateTeamNew").addEventListener("click", createTeamWithNewPlayers);
+    document.getElementById("btnCreateTeamExisting").addEventListener("click", createTeamWithExistingPlayers);
+    document.getElementById("btnStartMatch").addEventListener("click", startMatch);
+
+    // Beim Laden: Teams & Spieler ziehen
+    loadTeams();
+    loadSpieler();
+</script>
+</body>
+</html>

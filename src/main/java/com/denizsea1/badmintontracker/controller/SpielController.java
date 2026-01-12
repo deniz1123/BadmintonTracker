@@ -104,4 +104,25 @@ public class SpielController {
     public boolean istPauseEmpfohlen(@PathVariable Long spielId) {
         return spielService.istPauseEmpfohlen(spielId);
     }
+
+    ///
+
+    @PostMapping("/{id}/undoA")
+    public Spiel undoPunktA(@PathVariable Long id) {
+        return spielService.undoPunktFuerTeamA(id);
+    }
+
+    @PostMapping("/{id}/undoB")
+    public Spiel undoPunktB(@PathVariable Long id) {
+        return spielService.undoPunktFuerTeamB(id);
+    }
+
+    @PostMapping("/{id}/abbrechen")
+    public Spiel spielAbbrechen(
+            @PathVariable Long id,
+            @RequestParam boolean teamAGibtAuf
+    ) {
+        return spielService.brecheSpielAb(id, teamAGibtAuf);
+    }
+
 }

@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>BadmintonTracker – Match</title>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #f5f5f5;
+        }
+
+        .card {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+        }
+
+        .spielfeld {
+            border: 3px solid #333;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .spielfeld-row {
+            display: flex;
+            height: 140px;
+        }
+
+        .spielfeld-cell {
+            flex: 1;
+            border-right: 1px solid #333;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .spielfeld-row:last-child .spielfeld-cell {
+            border-bottom: none;
+        }
+
+        .spielfeld-cell:last-child {
+            border-right: none;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+        }
+
+        .table thead {
+            background-color: #f1f5fb;
+        }
+
+        .table-striped tbody tr:nth-of-type(odd) {
+            --bs-table-accent-bg: #f8fbff;
+        }
+
+        /* Pause-Modal Overlay */
+        .pause-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .pause-modal {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        .pause-timer {
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 12px 0 4px;
+        }
+    </style>
+</head>
+<body>
+<div class="container my-4">
+
+    <!-- Kopfbereich -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">BadmintonTracker – Match</h3>
+        <div class="d-flex gap-3">
+            <a href="/" class="btn btn-outline-secondary btn-sm">
+                🏠 Zur Startseite
+            </a>
+            <a href="/history" class="btn btn-outline-primary btn-sm">
+                📊 Historie
+            </a>
+        </div>
+    </div>
+
+    <p class="text-muted">
+        Hier siehst du das laufende Spiel, kannst Punkte vergeben, die Satzstände verfolgen
+        und bekommst Hinweise auf Pausen.
+    </p>
+
+    <div class="row g-3">
+
+        <!-- Spiel-Infos -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Spiel-Infos</h5>
+
+                    <p class="mb-1">
+                        <strong>Spiel-ID:</strong>
+                        <span id="spiel-id-text">–</span>
+                    </p>
+                    <p class="mb-2">
+                        <strong>Datum:</strong>
+                        <span id="spiel-datum">–</span>
+                    </p>
+
+                    <p class="mb-2">
+                        <strong>Status:</strong>
+                        <span id="spiel-status" class="badge bg-secondary status-badge">–</span>
+                    </p>
+
+                    <hr>
+
+                    <p class="mb-1">
+                        <strong>Aktueller Satz:</strong>
+                        <span id="aktueller-satz-label">–</span>
+                    </p>
+
+                    <div class="d-flex align-items-center mb-2">
+                        <strong class="me-1">Aufschlag:</strong>
+                        <span id="aufschlag-info">–</span>
+                    </div>
+                    <small class="text-muted d-block mb-2">
+                        Die Aufschlag-Seite kann in der Realität manuell angepasst werden,
+                        hier wird nur die Logik angezeigt.
+                    </small>
+
+                    <div class="mt-3">
+                        <p class="fw-semibold mb-1">Punkte vergeben</p>
+                        <div class="d-flex gap-2 mb-2">
+                            <button id="btn-punkt-a" class="btn btn-primary flex-fill">
+                                Punkt für Team A
+                            </button>
+                            <button id="btn-punkt-b" class="btn btn-primary flex-fill">
+                                Punkt für Team B
+                            </button>
+                        </div>
+
+                        <div class="d-flex gap-2 mb-2">
+                            <button id="btn-undo-a" class="btn btn-outline-secondary flex-fill btn-sm">
+                                ⮌ Punkt Team A zurücknehmen
+                            </button>
+                            <button id="btn-undo-b" class="btn btn-outline-secondary flex-fill btn-sm">
+                                ⮌ Punkt Team B zurücknehmen
+                            </button>
+                        </div>
+
+                        <div class="mt-2">
+                            <div class="fw-semibold small mb-1">Spielabbruch</div>
+                            <div class="d-flex gap-2">
+                                <button id="btn-abbruch-a" class="btn btn-outline-danger btn-sm flex-fill">
+                                    ⚠️ Team A gibt auf
+                                </button>
+                                <button id="btn-abbruch-b" class="btn btn-outline-danger btn-sm flex-fill">
+                                    ⚠️ Team B gibt auf
+                                </button>
+                            </div>
+                        </div>
+
+                        <div id="error-message" class="text-danger small mt-2" style="display:none;"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Spielfeld -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-2">Spielfeld</h5>
+                    <p class="text-muted mb-1">
+                        Links: <span id="team-a-name">Team A</span> &nbsp; | &nbsp;
+                        Rechts: <span id="team-b-name">Team B</span>
+                    </p>
+                    <p class="text-muted mb-3">
+                        In jeder Spalte gilt: oben = Spieler mit Position
+                        <strong>LINKS</strong>, unten = Spieler mit Position <strong>RECHTS</strong>.
+                    </p>
+
+                    <div class="spielfeld mb-3">
+                        <div class="spielfeld-row">
+                            <div id="cell-team-a-links" class="spielfeld-cell">–</div>
+                            <div id="cell-team-b-links" class="spielfeld-cell">–</div>
+                        </div>
+                        <div class="spielfeld-row">
+                            <div id="cell-team-a-rechts" class="spielfeld-cell">–</div>
+                            <div id="cell-team-b-rechts" class="spielfeld-cell">–</div>
+                        </div>
+                    </div>
+
+                    <div class="text-center small">
+                        <div>
+                            <strong>Team A</strong> (<span id="team-a-id">ID ?</span>)
+                        </div>
+                        <div>
+                            <strong>Team B</strong> (<span id="team-b-id">ID ?</span>)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Satzübersicht -->
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Satz-Übersicht</h5>
+            <div class="table-responsive">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th style="width:10%;">Satz</th>
+                        <th style="width:30%;">Punkte Team A</th>
+                        <th style="width:30%;">Punkte Team B</th>
+                        <th style="width:30%;">Status</th>
+                    </tr>
+                    </thead>
+                    <tbody id="satz-tabelle-body">
+                    <!-- Wird per JS gefüllt -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pause-Overlay / Modal -->
+<div id="pause-overlay" class="pause-overlay">
+    <div class="pause-modal">
+        <h5 class="mb-2">Pause empfohlen</h5>
+        <p class="mb-2">
+            Ein Team hat 11 oder mehr Punkte erreicht. Gemäß Badminton-Regeln ist eine kurze Pause sinnvoll
+            (bis zu 2 Minuten).
+        </p>
+        <p class="mb-2">
+            Du kannst eine 2-Minuten-Pause tracken.
+        </p>
+        <div class="pause-timer" id="pause-timer">02:00</div>
+        <div class="text-center text-muted mb-3" id="pause-info-extra"></div>
+        <div class="d-flex gap-2 justify-content-end">
+            <button id="btn-pause-skip" class="btn btn-outline-secondary btn-sm">
+                Keine Pause, weiter spielen
+            </button>
+            <button id="btn-pause-start" class="btn btn-primary btn-sm">
+                2-Minuten-Pause starten
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Spiel-ID aus URL bestimmen (unterstützt /match/13 UND ?spielId=13) ---
+    function ermittleSpielId() {
+        // 1) Query-Parameter prüfen
+        const params = new URLSearchParams(window.location.search);
+        const paramId = params.get("spielId");
+        if (paramId) {
+            return paramId;
+        }
+
+        // 2) Pfad /match/13 auslesen
+        const pathParts = window.location.pathname.split("/").filter(Boolean);
+        const last = pathParts[pathParts.length - 1];
+        if (last && !isNaN(last)) {
+            return last;
+        }
+        return null;
+    }
+
+    const spielId = ermittleSpielId();
+
+    if (!spielId) {
+        alert("Keine Spiel-ID in der URL gefunden (Parameter 'spielId' oder Pfad /match/{id}).");
+        throw new Error("Keine Spiel-ID");
+    }
+
+    // --- DOM-Referenzen ---
+    const spielIdText = document.getElementById("spiel-id-text");
+    const spielDatum = document.getElementById("spiel-datum");
+    const spielStatusBadge = document.getElementById("spiel-status");
+    const aktuellerSatzLabel = document.getElementById("aktueller-satz-label");
+    const aufschlagInfo = document.getElementById("aufschlag-info");
+    const errorMessage = document.getElementById("error-message");
+
+    const teamAName = document.getElementById("team-a-name");
+    const teamBName = document.getElementById("team-b-name");
+    const teamAIdLabel = document.getElementById("team-a-id");
+    const teamBIdLabel = document.getElementById("team-b-id");
+
+    const cellAL = document.getElementById("cell-team-a-links");
+    const cellAR = document.getElementById("cell-team-a-rechts");
+    const cellBL = document.getElementById("cell-team-b-links");
+    const cellBR = document.getElementById("cell-team-b-rechts");
+
+    const satzTabelleBody = document.getElementById("satz-tabelle-body");
+
+    const btnPunktA = document.getElementById("btn-punkt-a");
+    const btnPunktB = document.getElementById("btn-punkt-b");
+    const btnUndoA = document.getElementById("btn-undo-a");
+    const btnUndoB = document.getElementById("btn-undo-b");
+    const btnAbbruchA = document.getElementById("btn-abbruch-a");
+    const btnAbbruchB = document.getElementById("btn-abbruch-b");
+
+    const pauseOverlay = document.getElementById("pause-overlay");
+    const pauseTimer = document.getElementById("pause-timer");
+    const pauseInfoExtra = document.getElementById("pause-info-extra");
+    const btnPauseStart = document.getElementById("btn-pause-start");
+    const btnPauseSkip = document.getElementById("btn-pause-skip");
+
+    let pauseInterval = null;
+    let spielStatus = "LAUFEND";
+
+    // Satz / Pause-Zustände
+    let aktuellerSatzNummer = null;
+    let letzterSatzMitPause = null;   // in diesem Satz wurde das Popup bereits gezeigt
+    let allowPauseOverlay = false;    // wird erst nach einer Punkt-Interaktion true
+
+    // --- Helper: Fetch with Fehleranzeige ---
+    async function apiCall(url, options) {
+        errorMessage.style.display = "none";
+        errorMessage.textContent = "";
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || ("HTTP " + response.status));
+            }
+            if (response.headers.get("Content-Type")?.includes("application/json")) {
+                return await response.json();
+            }
+            return await response.text();
+        } catch (err) {
+            console.error(err);
+            errorMessage.textContent = "Aktion fehlgeschlagen: " + err.message;
+            errorMessage.style.display = "block";
+            throw err;
+        }
+    }
+
+    // --- Spiel laden und UI aktualisieren ---
+    async function ladeSpielUndAktualisiere() {
+        const data = await apiCall("/spiele/" + spielId);
+
+        spielStatus = data.status;
+        spielIdText.textContent = data.id;
+        spielDatum.textContent = data.datum || "–";
+
+        // Status-Badge
+        spielStatusBadge.textContent = data.status;
+        spielStatusBadge.className = "badge status-badge";
+        if (data.status === "LAUFEND") {
+            spielStatusBadge.classList.add("bg-success");
+        } else if (data.status === "BEENDET") {
+            spielStatusBadge.classList.add("bg-secondary");
+        } else if (data.status === "ABGEBROCHEN") {
+            spielStatusBadge.classList.add("bg-danger");
+        } else {
+            spielStatusBadge.classList.add("bg-secondary");
+        }
+
+        // Teams
+        const teamA = data.teams[0];
+        const teamB = data.teams[1];
+
+        teamAIdLabel.textContent = "ID " + teamA.id;
+        teamBIdLabel.textContent = "ID " + teamB.id;
+
+        teamAName.textContent = "Team A";
+        teamBName.textContent = "Team B";
+
+        function nameMitPosition(team, pos) {
+            const p = team.spieler.find(sp => sp.positionImTeam === pos);
+            return p ? (p.vorname + " " + p.nachname) : "–";
+        }
+
+        cellAL.textContent = nameMitPosition(teamA, "LINKS");
+        cellAR.textContent = nameMitPosition(teamA, "RECHTS");
+        cellBL.textContent = nameMitPosition(teamB, "LINKS");
+        cellBR.textContent = nameMitPosition(teamB, "RECHTS");
+
+        // Sätze
+        const saetze = data.saetze || [];
+        saetze.sort((a, b) => a.nummer - b.nummer);
+        satzTabelleBody.innerHTML = "";
+
+        let maxNummer = 0;
+        saetze.forEach(satz => {
+            maxNummer = Math.max(maxNummer, satz.nummer);
+            const tr = document.createElement("tr");
+            const status = (satz.punkteTeamA >= 21 || satz.punkteTeamB >= 21) ? "Beendet" : "Laufend";
+
+            tr.innerHTML = `
+                <td>${satz.nummer}</td>
+                <td>${satz.punkteTeamA}</td>
+                <td>${satz.punkteTeamB}</td>
+                <td>${status}</td>
+            `;
+            satzTabelleBody.appendChild(tr);
+        });
+
+        aktuellerSatzNummer = maxNummer > 0 ? maxNummer : null;
+        aktuellerSatzLabel.textContent = maxNummer > 0 ? ("Satz " + maxNummer) : "–";
+
+        // Aufschlag-Info
+        let aufschlagText = "–";
+        if (data.aufschlagTeam) {
+            const teamLabel = (data.aufschlagTeam.id === teamA.id) ? "Team A" : "Team B";
+            aufschlagText = teamLabel + " von " + (data.aufschlagSeite || "–");
+        }
+        aufschlagInfo.textContent = aufschlagText;
+
+        // Buttons deaktivieren, wenn Spiel nicht laufend
+        const disable = data.status !== "LAUFEND";
+        btnPunktA.disabled = disable;
+        btnPunktB.disabled = disable;
+        btnUndoA.disabled = disable;
+        btnUndoB.disabled = disable;
+        btnAbbruchA.disabled = disable;
+        btnAbbruchB.disabled = disable;
+
+        // Pause-Empfehlung prüfen nur bei laufendem Spiel
+        if (data.status === "LAUFEND") {
+            pruefePauseEmpfehlung();
+        } else {
+            schliessePauseOverlay();
+        }
+    }
+
+    // --- Punkte & Undo & Abbruch ---
+    async function punktFuer(team) {
+        if (spielStatus !== "LAUFEND") return;
+        // Ab jetzt darf die Pause angezeigt werden (nicht beim reinen Öffnen)
+        allowPauseOverlay = true;
+        const url = `/spiele/${spielId}/punkt${team}`;
+        await apiCall(url, {method: "POST"});
+        await ladeSpielUndAktualisiere();
+    }
+
+    async function undoPunkt(team) {
+        if (spielStatus !== "LAUFEND") return;
+        allowPauseOverlay = true;
+        const url = `/spiele/${spielId}/undo${team}`;
+        await apiCall(url, {method: "POST"});
+        await ladeSpielUndAktualisiere();
+    }
+
+    async function spielAbbrechen(teamAGibtAuf) {
+        const teamText = teamAGibtAuf ? "Team A" : "Team B";
+        if (!confirm(teamText + " gibt wirklich auf? Das Spiel wird als verloren gewertet.")) {
+            return;
+        }
+        const url = `/spiele/${spielId}/abbrechen?teamAGibtAuf=${teamAGibtAuf}`;
+        await apiCall(url, {method: "POST"});
+        await ladeSpielUndAktualisiere();
+    }
+
+    btnPunktA.addEventListener("click", () => punktFuer("A"));
+    btnPunktB.addEventListener("click", () => punktFuer("B"));
+    btnUndoA.addEventListener("click", () => undoPunkt("A"));
+    btnUndoB.addEventListener("click", () => undoPunkt("B"));
+
+    btnAbbruchA.addEventListener("click", () => spielAbbrechen(true));
+    btnAbbruchB.addEventListener("click", () => spielAbbrechen(false));
+
+    // --- Pause-Empfehlung ---
+    async function pruefePauseEmpfehlung() {
+        // Beim reinen Öffnen der Seite NIE automatisch Pause anzeigen
+        if (!allowPauseOverlay) return;
+        if (aktuellerSatzNummer == null) return;
+
+        try {
+            const res = await fetch(`/spiele/${spielId}/pauseEmpfohlen`);
+            if (!res.ok) return;
+            const text = await res.text();
+            const pauseEmpfohlen = text === "true";
+
+            // Nur EIN Mal pro Satz anzeigen
+            if (
+                pauseEmpfohlen &&
+                spielStatus === "LAUFEND" &&
+                letzterSatzMitPause !== aktuellerSatzNummer
+            ) {
+                letzterSatzMitPause = aktuellerSatzNummer;
+                zeigePauseOverlay();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function zeigePauseOverlay() {
+        if (pauseOverlay.style.display === "flex") return;
+        pauseOverlay.style.display = "flex";
+        pauseTimer.textContent = "02:00";
+        pauseInfoExtra.textContent = "";
+    }
+
+    function schliessePauseOverlay() {
+        pauseOverlay.style.display = "none";
+        if (pauseInterval) {
+            clearInterval(pauseInterval);
+            pauseInterval = null;
+        }
+    }
+
+    btnPauseSkip.addEventListener("click", () => {
+        schliessePauseOverlay();
+    });
+
+    btnPauseStart.addEventListener("click", () => {
+        if (pauseInterval) {
+            return;
+        }
+        let sekunden = 120;
+        pauseTimer.textContent = "02:00";
+        pauseInfoExtra.textContent = "Pause läuft …";
+
+        pauseInterval = setInterval(() => {
+            sekunden--;
+            if (sekunden <= 0) {
+                clearInterval(pauseInterval);
+                pauseInterval = null;
+                pauseTimer.textContent = "00:00";
+                pauseInfoExtra.textContent = "Pause beendet. Weiter geht's!";
+                setTimeout(schliessePauseOverlay, 1500);
+                return;
+            }
+            const m = String(Math.floor(sekunden / 60)).padStart(2, "0");
+            const s = String(sekunden % 60).padStart(2, "0");
+            pauseTimer.textContent = `${m}:${s}`;
+        }, 1000);
+    });
+
+    // --- Initialer Load ---
+    document.addEventListener("DOMContentLoaded", () => {
+        // Beim ersten Laden: allowPauseOverlay = false -> kein Popup beim Einstieg
+        ladeSpielUndAktualisiere();
+    });
+</script>
+
+</body>
+</html>

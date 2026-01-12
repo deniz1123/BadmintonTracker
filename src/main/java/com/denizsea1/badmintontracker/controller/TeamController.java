@@ -36,10 +36,12 @@ public class TeamController {
     // 3) Team anlegen: POST /teams
     @PostMapping
     public Team createTeam(@RequestBody Team team) {
-        // Beziehung Team <-> Spieler setzen
+
+        // Beziehung Team <-> Spieler setzen + Flag initialisieren
         if (team.getSpieler() != null) {
             for (Spieler s : team.getSpieler()) {
                 s.setTeam(team);
+                s.setInAktivemSpiel(false); // neues Team, noch in keinem laufenden Spiel
             }
         }
 
@@ -48,7 +50,6 @@ public class TeamController {
 
         return teamRepository.save(team);
     }
-
 
     // 4) Team löschen: DELETE /teams/{id}
     @DeleteMapping("/{id}")

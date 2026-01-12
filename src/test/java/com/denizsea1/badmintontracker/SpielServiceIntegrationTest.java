@@ -236,6 +236,108 @@ class BadmintonTrackerIntegrationTest {
         assertTrue(spielService.istPauseEmpfohlen(spielId));
     }
 
+    // -------------------------------------------------------------------------
+    // NEUE DOMAIN-TESTS: Spieler-Blockierung, Undo, Spielabbruch
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Spieler können nicht gleichzeitig in zwei laufenden Spielen sein")
+    void spielerKoennenNichtInZweiAktivenSpielenSein() {
+        Team teamA = persistTeam("Max", "Mueller", "Lara", "Schulz");
+        Team teamB = persistTeam("Paul", "Meier", "Anna", "Schmidt");
+        Team teamC = persistTeam("Tom", "Test", "Tina", "Test");
+
+        // Erstes Spiel mit A vs B -> ok
+        Spiel spiel1 = spielService.startNeuesSpiel(
+                teamA.getId(), teamB.getId(), true, Seite.RECHTS);
+        assertNotNull(spiel1.getId());
+
+        // Zweites Spiel mit Team A (A vs C) -> sollte fehlschlagen,
+        // weil Spieler von A bereits in einem laufenden Spiel sind.
+        assertThrows(IllegalStateException.class, () ->
+                spielService.startNeuesSpiel(
+                        teamA.getId(), teamC.getId(), true, Seite.RECHTS)
+        );
+    }
+
+    @Test
+    @DisplayName("Undo Punkt für Team A stellt Punktestand, Aufschlagseite und Positionen zurück (einfacher Fall)")
+    void undoPunktFuerTeamA_stelltEinfachenZustandZurueck() {
+        Team teamA = persistTeam("Max", "Mueller", "Lara", "Schulz");
+        Team teamB = persistTeam("Paul", "Meier", "Anna", "Schmidt");
+
+        Spiel spiel = spielService.startNeuesSpiel(
+                teamA.getId(), teamB.getId(), true, Seite.RECHTS);
+        Long spielId = spiel.getId();
+
+        // Ausgangspositionen merken
+        Team gespeichertesTeamA = teamRepository.findById(teamA.getId()).orElseThrow();
+        Seite posVorherS1 = gespeichertesTeamA.getSpieler().get(0).getPositionImTeam();
+        Seite posVorherS2 = gespeichertesTeamA.getSpieler().get(1).getPositionImTeam();
+
+        assertEquals(Seite.RECHTS, spiel.getAufschlagSeite());
+        assertEquals(teamA.getId(), spiel.getAufschlagTeam().getId());
+
+        // 1 Punkt für Team A
+        spiel = spielService.punktFuerTeamA(spielId);
+
+        // Sicherstellen, dass der Punkt gezählt wurde
+        Satz satzNachPunkt = getAktuellenSatz(spiel);
+        assertEquals(1, satzNachPunkt.getPunkteTeamA());
+        assertEquals(0, satzNachPunkt.getPunkteTeamB());
+
+        // Jetzt Undo für Team A
+        spiel = spielService.undoPunktFuerTeamA(spielId);
+
+        Satz satzNachUndo = getAktuellenSatz(spiel);
+        assertEquals(0, satzNachUndo.getPunkteTeamA());
+        assertEquals(0, satzNachUndo.getPunkteTeamB());
+
+        // Aufschlagteam und Aufschlagseite wieder wie am Anfang
+        assertEquals(teamA.getId(), spiel.getAufschlagTeam().getId());
+        assertEquals(Seite.RECHTS, spiel.getAufschlagSeite());
+
+        // Spielerpositionen wieder wie vor dem Punkt
+        gespeichertesTeamA = teamRepository.findById(teamA.getId()).orElseThrow();
+        Seite posNachUndoS1 = gespeichertesTeamA.getSpieler().get(0).getPositionImTeam();
+        Seite posNachUndoS2 = gespeichertesTeamA.getSpieler().get(1).getPositionImTeam();
+
+        assertEquals(posVorherS1, posNachUndoS1);
+        assertEquals(posVorherS2, posNachUndoS2);
+    }
+
+    @Test
+    @DisplayName("Spielabbruch setzt Status ABGEBROCHEN, Gewinner und setzt Spieler wieder frei")
+    void spielKannAbgebrochenWerdenUndSetztSpielerFrei() {
+        Team teamA = persistTeam("Max", "Mueller", "Lara", "Schulz");
+        Team teamB = persistTeam("Paul", "Meier", "Anna", "Schmidt");
+
+        Spiel spiel = spielService.startNeuesSpiel(
+                teamA.getId(), teamB.getId(), true, Seite.RECHTS);
+        Long spielId = spiel.getId();
+
+        // Nach Spielstart sollten alle Spieler der Teams als "in aktivem Spiel" markiert sein
+        Team geladenA = teamRepository.findById(teamA.getId()).orElseThrow();
+        Team geladenB = teamRepository.findById(teamB.getId()).orElseThrow();
+
+        assertTrue(geladenA.getSpieler().stream().allMatch(Spieler::isInAktivemSpiel));
+        assertTrue(geladenB.getSpieler().stream().allMatch(Spieler::isInAktivemSpiel));
+
+        // Team A bricht ab -> Team B gewinnt
+        spielService.brecheSpielAb(spielId, true);
+
+        Spiel abgebrochen = spielRepository.findById(spielId).orElseThrow();
+        assertEquals(SpielStatus.ABGEBROCHEN, abgebrochen.getStatus());
+        assertNotNull(abgebrochen.getGewinnerTeam());
+        assertEquals(teamB.getId(), abgebrochen.getGewinnerTeam().getId());
+
+        // Spieler müssen wieder freigegeben sein
+        geladenA = teamRepository.findById(teamA.getId()).orElseThrow();
+        geladenB = teamRepository.findById(teamB.getId()).orElseThrow();
+
+        assertTrue(geladenA.getSpieler().stream().noneMatch(Spieler::isInAktivemSpiel));
+        assertTrue(geladenB.getSpieler().stream().noneMatch(Spieler::isInAktivemSpiel));
+    }
 
     // -------------------------------------------------------------------------
     // B) API-TESTS (MockMvc)

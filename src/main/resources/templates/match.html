@@ -127,6 +127,12 @@
                         <span id="spiel-status" class="badge bg-secondary status-badge">–</span>
                     </p>
 
+                    <!-- NEU: Gewinner-Anzeige -->
+                    <p class="mb-2" id="gewinner-row" style="display:none;">
+                        <strong>Gewinner:</strong>
+                        <span id="gewinner-info" class="badge bg-success status-badge">–</span>
+                    </p>
+
                     <hr>
 
                     <p class="mb-1">
@@ -302,6 +308,10 @@
     const aufschlagInfo = document.getElementById("aufschlag-info");
     const errorMessage = document.getElementById("error-message");
 
+    // NEU: Gewinner
+    const gewinnerRow = document.getElementById("gewinner-row");
+    const gewinnerInfo = document.getElementById("gewinner-info");
+
     const teamAName = document.getElementById("team-a-name");
     const teamBName = document.getElementById("team-b-name");
     const teamAIdLabel = document.getElementById("team-a-id");
@@ -397,6 +407,27 @@
         cellAR.textContent = nameMitPosition(teamA, "RECHTS");
         cellBL.textContent = nameMitPosition(teamB, "LINKS");
         cellBR.textContent = nameMitPosition(teamB, "RECHTS");
+
+        // NEU: Gewinner anzeigen, wenn vorhanden
+        if (data.gewinnerTeam) {
+            const winnerId = data.gewinnerTeam.id;
+            let winnerLabel = "Team ID " + winnerId;
+            if (winnerId === teamA.id) {
+                winnerLabel = "Team A";
+            } else if (winnerId === teamB.id) {
+                winnerLabel = "Team B";
+            }
+            // Bei Abbruch kannst du optional noch was anhängen
+            if (data.status === "ABGEBROCHEN") {
+                winnerLabel += " (Sieg nach Aufgabe)";
+            }
+
+            gewinnerInfo.textContent = winnerLabel;
+            gewinnerRow.style.display = "block";
+        } else {
+            gewinnerInfo.textContent = "–";
+            gewinnerRow.style.display = "none";
+        }
 
         // Sätze
         const saetze = data.saetze || [];

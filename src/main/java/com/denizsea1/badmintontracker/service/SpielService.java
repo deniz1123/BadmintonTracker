@@ -208,15 +208,18 @@ public class SpielService {
 
         Satz aktuellerSatz = ermittleAktuellenSatz(spiel);
 
-        // 1) Punktestand zurückdrehen
+        // 1) Punktestand zurückdrehen (aber ohne Exception bei 0 → einfach NO-OP)
+
         if (undoFuerTeamA) {
             if (aktuellerSatz.getPunkteTeamA() <= 0) {
-                throw new IllegalStateException("Team A hat keinen Punkt, der rückgängig gemacht werden kann.");
+                // Nichts zu tun – Undo ist idempotent
+                return spiel;
             }
             aktuellerSatz.setPunkteTeamA(aktuellerSatz.getPunkteTeamA() - 1);
         } else {
             if (aktuellerSatz.getPunkteTeamB() <= 0) {
-                throw new IllegalStateException("Team B hat keinen Punkt, der rückgängig gemacht werden kann.");
+                // Nichts zu tun – Undo ist idempotent
+                return spiel;
             }
             aktuellerSatz.setPunkteTeamB(aktuellerSatz.getPunkteTeamB() - 1);
         }

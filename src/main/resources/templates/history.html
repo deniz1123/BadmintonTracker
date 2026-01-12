@@ -82,6 +82,7 @@
                         <th style="width: 140px;">Datum</th>
                         <th>Teams</th>
                         <th style="width: 140px;">Ergebnis (Sätze)</th>
+                        <th style="width: 140px;">Gewinner</th>
                         <th style="width: 140px;">Status</th>
                         <th style="width: 150px;">Aktion</th>
                     </tr>
@@ -130,7 +131,7 @@
         if (!spiele || spiele.length === 0) {
             const tr = document.createElement("tr");
             const td = document.createElement("td");
-            td.colSpan = 6;
+            td.colSpan = 7;
             td.textContent = "Noch keine Spiele gespeichert.";
             td.classList.add("text-muted");
             tr.appendChild(td);
@@ -161,6 +162,11 @@
             tdErg.textContent = computeSatzErgebnis(spiel);
             tr.appendChild(tdErg);
 
+            // Gewinner
+            const tdGewinner = document.createElement("td");
+            tdGewinner.textContent = computeGewinnerLabel(spiel);
+            tr.appendChild(tdGewinner);
+
             // Status
             const tdStatus = document.createElement("td");
             const statusSpan = document.createElement("span");
@@ -181,10 +187,8 @@
             const btn = document.createElement("a");
             btn.className = "btn btn-primary btn-sm";
             btn.textContent = "Details ansehen";
-            // WICHTIG: auf /match/{id} gehen, damit der Controller das Template rendert
+            // auf /match/{id} gehen, damit der Controller das Template rendert
             btn.href = `/match/${encodeURIComponent(spiel.id)}`;
-            // alternativ (falls du lieber Query magst):
-            // btn.href = `/match?spielId=${encodeURIComponent(spiel.id)}`;
             tdAktion.appendChild(btn);
             tr.appendChild(tdAktion);
 
@@ -246,6 +250,32 @@
             return "-";
         }
         return `${aGewonnen} : ${bGewonnen}`;
+    }
+
+    // NEU: Gewinner-Label berechnen
+    function computeGewinnerLabel(spiel) {
+        if (!spiel || !spiel.gewinnerTeam) {
+            return "-";
+        }
+
+        const teams = spiel.teams || [];
+        const teamA = teams[0];
+        const teamB = teams[1];
+        const winner = spiel.gewinnerTeam;
+
+        let label = "Team ID " + (winner.id ?? "-");
+
+        if (teamA && winner.id === teamA.id) {
+            label = "Team A";
+        } else if (teamB && winner.id === teamB.id) {
+            label = "Team B";
+        }
+
+        if (spiel.status === "ABGEBROCHEN") {
+            label += " (Sieg nach Aufgabe)";
+        }
+
+        return label;
     }
 
     function showError(msg) {
